@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'dart:convert';
+import 'package:intl/intl.dart'; // Import intl package for date formatting.
 
 void main() {
   runApp(const MyApp());
@@ -11,12 +12,9 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
@@ -81,20 +79,44 @@ class NewsTile extends StatelessWidget {
 
   const NewsTile({Key? key, required this.article}) : super(key: key);
 
+  String formatPublishedDate(String? date) {
+    if (date == null || date.isEmpty) {
+      return 'No Date';
+    }
+    try {
+      final DateTime parsedDate = DateTime.parse(date);
+      final DateFormat formatter = DateFormat('yyyy-MM-dd');
+      return formatter.format(parsedDate);
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.all(8.0),
       child: ListTile(
         leading: article['urlToImage'] != null
-            ? Image.network(article['urlToImage'], width: 100, fit: BoxFit.cover)
+            ? Image.network(article['urlToImage'], width: 100, fit: BoxFit.fill, height: double.infinity, )
             : const Icon(Icons.image, size: 50),
         title: Text(
+          style: TextStyle(fontWeight: FontWeight.bold),
           article['title'] ?? 'No Title',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
+          
         ),
-        subtitle: Text(article['author'] ?? 'Unknown Author'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 5),
+            Text(article['author'] ?? 'Unknown Author'),
+            const SizedBox(height: 5),
+            Text(formatPublishedDate(article['publishedAt'] ?? 'No Date')),
+          ],
+        ),
+        
         
       ),
     );
