@@ -1,3 +1,4 @@
+import 'package:assignment3_24525/bloc/news_event.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,21 +6,30 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart'; // Import intl package for date formatting.
+import './bloc/news_bloc.dart';
+import 'bloc/news_event.dart';
+import 'bloc/news_state.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+    return BlocProvider(
+      // Providing the NewsBloc to the entire app
+      create: (context) => NewsBloc()..add(FetchNews()),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Flutter News App',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+        ),
+        home: const NewsPage(), // Initial screen of the app
       ),
-      home: const NewsPage(),
     );
   }
 }
@@ -27,38 +37,55 @@ class MyApp extends StatelessWidget {
 class NewsPage extends StatelessWidget {
   const NewsPage({Key? key}) : super(key: key);
 
-  Future<List<dynamic>> fetchNews() async {
-    const String baseUrl = 'https://newsapi.org/v2/top-headlines?country=us';
-    const String apiKey = 'abb021fcd9124fe4a756d19365dc0136';
-    final response = await http.get(Uri.parse('$baseUrl&apiKey=$apiKey'));
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      return data['articles'];
-    } else {
-      throw Exception('Failed to fetch news');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(width: 10),
-            const Text('News App'),
+            Row(
+              children: [
+                const Text('News App'),
+                const Spacer(),
+                Image.asset('assets/logo.png', height: 40),
+              ],
+            ),
+            const Text(
+              "The Best News App",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: Colors.grey,
+              ),
+            ),
           ],
         ),
       ),
-      body: FutureBuilder<List<dynamic>>(
-        future: fetchNews(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: BlocConsumer<NewsBloc, NewsState>(
+        listener: (context, state) {
+  if (state is ShowModalState) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return NewsModalBottomSheet(article: state.article);
+      },
+    ).whenComplete(() {
+      // Trigger the ModalDismissed event when the modal is closed
+      context.read<NewsBloc>().add(ModalDismissed());
+    });
+  }
+},
+
+        builder: (context, state) {
+          if (state is NewsLoading) {
             return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (snapshot.hasData) {
-            final articles = snapshot.data!;
+          } else if (state is NewsLoaded || state is ShowModalState) {
+            final articles = (state is NewsLoaded)
+                ? state.articles
+                : (state as ShowModalState).articles;
             return ListView.builder(
               itemCount: articles.length,
               itemBuilder: (context, index) {
@@ -66,8 +93,10 @@ class NewsPage extends StatelessWidget {
                 return NewsTile(article: article);
               },
             );
+          } else if (state is NewsError) {
+            return Center(child: Text('Error: ${state.message}'));
           }
-          return const Center(child: Text('No News Found'));
+          return const Center(child: Text('No News Available'));
         },
       ),
     );
@@ -75,10 +104,9 @@ class NewsPage extends StatelessWidget {
 }
 
 class NewsTile extends StatelessWidget {
-  final Map<String, dynamic> article;
-
   const NewsTile({Key? key, required this.article}) : super(key: key);
 
+  final NewsArticleModel article;
   String formatPublishedDate(String? date) {
     if (date == null || date.isEmpty) {
       return 'No Date';
@@ -97,12 +125,12 @@ class NewsTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.all(8.0),
       child: ListTile(
-        leading: article['urlToImage'] != null
-            ? Image.network(article['urlToImage'], width: 100, fit: BoxFit.fill, height: double.infinity, )
+        leading: article.imageUrl != null
+            ? Image.network(article.imageUrl!, width: 100, fit: BoxFit.fill, height: double.infinity, )
             : const Icon(Icons.image, size: 50),
         title: Text(
           style: TextStyle(fontWeight: FontWeight.bold),
-          article['title'] ?? 'No Title',
+          article.title ?? 'No Title',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           
@@ -111,13 +139,14 @@ class NewsTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 5),
-            Text(article['author'] ?? 'Unknown Author'),
+            Text(article.author ?? 'Unknown Author'),
             const SizedBox(height: 5),
-            Text(formatPublishedDate(article['publishedAt'] ?? 'No Date')),
+            Text(formatPublishedDate(article.publishedAt ?? 'No Date')),
           ],
         ),
-        
-        
+        onTap: (){
+          context.read<NewsBloc>().add(ShowArticleDetails(article));
+        },     
       ),
     );
   }
@@ -136,6 +165,13 @@ class NewsModalBottomSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(16),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            offset: Offset(0, -2),
+            blurRadius: 10,
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(16.0),
       child: SingleChildScrollView(
@@ -143,7 +179,7 @@ class NewsModalBottomSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title
+            // Article Title
             Text(
               article.title,
               style: const TextStyle(
@@ -152,42 +188,69 @@ class NewsModalBottomSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            // Author
-            Text(
-              'Author: ${article.author ?? 'Unknown Author'}',
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 14,
-              ),
+
+            // Author and Published Date
+            Row(
+              children: [
+                Text(
+                  'By ${article.author ?? 'Unknown Author'}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+                const Spacer(),
+                Text(
+                  'Published on ${article.publishedAt ?? 'No Date'}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            // Description
+            const SizedBox(height: 16),
+
+            // Article Image
+            if (article.imageUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8.0),
+                child: Image.network(
+                  article.imageUrl!,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // Article Description
             Text(
               article.description ?? 'No Description Available',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 10),
-            // Content
-            Text(
-              article.content ?? 'No Content Available',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.5, // Improve readability
+              ),
             ),
             const SizedBox(height: 20),
-            // Published Date
-            Text(
-              'Published: ${article.publishedAt ?? 'No Date'}',
-              style: const TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-            const SizedBox(height: 20),
-            // View Article Button
-            ElevatedButton(
-              onPressed: () {
-                final url = article.url;
-                if (url != null) {
-                  _launchUrl(context, url);
-                }
-              },
-              child: const Text('View Full Article'),
+
+            // View Full Article Button
+            Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  if (article.url != null) {
+                    _launchUrl(context, article.url!);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'View Full Article',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
