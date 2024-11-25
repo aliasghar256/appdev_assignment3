@@ -259,14 +259,19 @@ class NewsModalBottomSheet extends StatelessWidget {
   }
 
   void _launchUrl(BuildContext context, String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open URL: $url')),
-      );
-    }
+  final uri = Uri.parse(url); // Convert the URL string to a Uri object
+
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication, // Opens the URL in an external browser
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not open URL: $url')),
+    );
   }
+}
 }
 
 class NewsArticleModel {
