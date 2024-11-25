@@ -123,31 +123,117 @@ class NewsTile extends StatelessWidget {
   }
 }
 
-class NewsTileModel {
-  final String? author;
-  final String? title;
-  final String? publishedAt;
-  final String? content;
-  final String? imageUrl;
-  final String? articleUrl;
+class NewsModalBottomSheet extends StatelessWidget {
+  final NewsArticleModel article;
 
-  NewsTileModel({
+  const NewsModalBottomSheet({Key? key, required this.article}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(16),
+        ),
+      ),
+      padding: const EdgeInsets.all(16.0),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title
+            Text(
+              article.title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Author
+            Text(
+              'Author: ${article.author ?? 'Unknown Author'}',
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Description
+            Text(
+              article.description ?? 'No Description Available',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 10),
+            // Content
+            Text(
+              article.content ?? 'No Content Available',
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            // Published Date
+            Text(
+              'Published: ${article.publishedAt ?? 'No Date'}',
+              style: const TextStyle(color: Colors.grey, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            // View Article Button
+            ElevatedButton(
+              onPressed: () {
+                final url = article.url;
+                if (url != null) {
+                  _launchUrl(context, url);
+                }
+              },
+              child: const Text('View Full Article'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _launchUrl(BuildContext context, String url) async {
+    if (await canLaunch(url)) {
+      await launch(url);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open URL: $url')),
+      );
+    }
+  }
+}
+
+class NewsArticleModel {
+  final String? author;
+  final String title;
+  final String? description;
+  final String? content;
+  final String? publishedAt;
+  final String? url;
+  final String? imageUrl;
+
+  NewsArticleModel({
     this.author,
     required this.title,
-    this.publishedAt,
+    this.description,
     this.content,
+    this.publishedAt,
+    this.url,
     this.imageUrl,
-    this.articleUrl,
   });
 
-  factory NewsTileModel.fromJson(Map<String, dynamic> json) {
-    return NewsTileModel(
+  factory NewsArticleModel.fromJson(Map<String, dynamic> json) {
+    return NewsArticleModel(
       author: json['author'],
-      title: json['title'],
-      publishedAt: json['publishedAt'],
+      title: json['title'] ?? 'No Title',
+      description: json['description'],
       content: json['content'],
+      publishedAt: json['publishedAt'],
+      url: json['url'],
       imageUrl: json['urlToImage'],
-      articleUrl: json['url'],
     );
   }
 }
